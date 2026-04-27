@@ -1,0 +1,18 @@
+services:
+  code-atlas:
+    build: .
+    ports:
+      - "8090:80"
+    environment:
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - DB_PATH=/data/db/code-atlas.db
+      - PROJECTS_DIR=/data/projects
+      - PORT=3000
+    volumes:
+      - atlas_projects:/data/projects
+      - atlas_db:/data/db
+    restart: unless-stopped
+
+volumes:
+  atlas_projects:
+  atlas_db:

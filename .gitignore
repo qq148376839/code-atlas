@@ -1,0 +1,11 @@
+dev-log/
+.env
+.env.local
+node_modules/
+.next/
+dist/
+.vite/
+*.db
+*.sqlite
+.DS_Store
+.claude/.needs-review

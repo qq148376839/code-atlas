@@ -1,0 +1,18 @@
+{
+  "name": "code-atlas",
+  "private": true,
+  "version": "0.1.0",
+  "description": "代码分析与可视化工具——让不写代码的人也能看懂项目全貌",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "dev:backend": "pnpm --filter @code-atlas/backend dev",
+    "dev:frontend": "pnpm --filter @code-atlas/frontend dev",
+    "build:backend": "pnpm --filter @code-atlas/backend build",
+    "build:frontend": "pnpm --filter @code-atlas/frontend build"
+  }
+}
