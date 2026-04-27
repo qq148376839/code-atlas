@@ -9,12 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
     "@xyflow/react": "^12.6.0",
     "elkjs": "^0.9.3",
-    "zustand": "^5.0.0",
-    "ky": "^1.7.0"
+    "framer-motion": "^12.38.0",
+    "ky": "^1.7.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.1.0",

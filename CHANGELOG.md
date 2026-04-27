@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.0 - 2026-04-27
+
+### Changed — Frontend Dashboard Overhaul
+- 设计系统：CSS 变量 token 体系（配色/字体/动画），JetBrains Mono 数据字体
+- 新增 framer-motion 动画库
+- 后端 `GET /api/projects` 返回 `ProjectWithStats[]`（含 stats 聚合）
+- ProjectList 重做为仪表盘首页：聚合统计条 + 项目卡片网格 + Modal 表单 + 空状态
+- ProjectView 增加指标条 + 扫描进度条动画 + 加载 spinner
+- ModuleNode 全面重做：顶部色条 + 复杂度进度条 + glow 选中态
+- ModuleMap：径向渐变背景 + 边按权重分色分线型 + 点状网格
+- ModuleDetail：三 Tab 面板（概览/依赖/文件）+ 滑入动画 + 文件搜索
+- App 层页面切换加 AnimatePresence 过渡
+
 ## 0.1.0 - 2026-04-27
 
 ### Added

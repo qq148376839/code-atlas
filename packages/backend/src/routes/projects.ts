@@ -18,15 +18,33 @@ const updateProjectSchema = z.object({
 });
 
 export async function projectRoutes(app: FastifyInstance): Promise<void> {
-  // GET /api/projects - List all projects
+  // GET /api/projects - List all projects with stats
   app.get('/api/projects', async () => {
     const db = getDb();
-    const projects = db.prepare(`
-      SELECT id, name, git_url, local_path, default_branch, last_scanned_at, scan_error, created_at
-      FROM projects ORDER BY created_at DESC
-    `).all();
+    const rows = db.prepare(`
+      SELECT
+        p.id, p.name, p.git_url, p.local_path, p.default_branch,
+        p.last_scanned_at, p.scan_error, p.created_at,
+        COUNT(DISTINCT m.id) as module_count,
+        COALESCE(SUM(m.file_count), 0) as total_files,
+        COALESCE(SUM(m.line_count), 0) as total_lines,
+        COUNT(DISTINCT d.id) as dependency_count
+      FROM projects p
+      LEFT JOIN modules m ON m.project_id = p.id
+      LEFT JOIN dependencies d ON d.project_id = p.id
+      GROUP BY p.id
+      ORDER BY p.created_at DESC
+    `).all() as any[];
 
-    return projects.map(formatProject);
+    return rows.map((row) => ({
+      ...formatProject(row),
+      stats: {
+        moduleCount: row.module_count,
+        totalFiles: row.total_files,
+        totalLines: row.total_lines,
+        dependencyCount: row.dependency_count,
+      },
+    }));
   });
 
   // POST /api/projects - Register new project

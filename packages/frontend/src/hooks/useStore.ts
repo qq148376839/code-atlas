@@ -1,11 +1,11 @@
 import { create } from 'zustand';
-import type { Project, ModuleDetail, DependencyGraph, ScanStatus } from '../api/client';
+import type { ProjectWithStats, ModuleDetail, DependencyGraph, ScanStatus } from '../api/client';
 
 interface AppState {
   // Projects
-  projects: Project[];
+  projects: ProjectWithStats[];
   currentProjectId: string | null;
-  setProjects: (projects: Project[]) => void;
+  setProjects: (projects: ProjectWithStats[]) => void;
   setCurrentProject: (id: string | null) => void;
 
   // Graph data

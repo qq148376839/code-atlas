@@ -47,12 +47,12 @@ export default function ModuleMap() {
         source: dep.source,
         target: dep.target,
         animated: dep.weight > 5,
-        style: {
-          strokeWidth: Math.min(Math.max(dep.weight, 1), 6),
-          stroke: '#64748b',
-        },
+        style: getEdgeStyle(dep.weight),
         label: dep.weight > 1 ? String(dep.weight) : undefined,
-        labelStyle: { fill: '#94a3b8', fontSize: 10 },
+        labelStyle: { fill: 'var(--color-fg-secondary)', fontSize: 10 },
+        labelBgStyle: { fill: 'var(--color-surface)', fillOpacity: 0.8 },
+        labelBgPadding: [4, 2] as [number, number],
+        labelBgBorderRadius: 3,
       }));
 
       const layouted = await computeLayout(rawNodes, rawEdges);
@@ -64,14 +64,18 @@ export default function ModuleMap() {
     buildGraph();
   }, [graph, setNodes, setEdges]);
 
+  const [nodeError, setNodeError] = useState<string | null>(null);
+
   const handleNodeClick = useCallback(
     async (_: any, node: Node) => {
       if (!currentProjectId) return;
+      setNodeError(null);
       try {
         const detail = await projectApi.moduleDetail(currentProjectId, node.id);
         setSelectedModule(node.id, detail);
-      } catch (err) {
-        console.error('Failed to load module detail:', err);
+      } catch {
+        setNodeError('加载模块详情失败');
+        setTimeout(() => setNodeError(null), 3000);
       }
     },
     [currentProjectId, setSelectedModule]
@@ -79,38 +83,70 @@ export default function ModuleMap() {
 
   if (!layoutReady) {
     return (
-      <div className="flex items-center justify-center h-full text-slate-400">
-        计算布局中...
+      <div className="flex items-center justify-center h-full">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-5 w-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm text-fg-muted">计算布局中...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onNodeClick={handleNodeClick}
-      nodeTypes={nodeTypes}
-      fitView
-      minZoom={0.1}
-      maxZoom={2}
-      proOptions={{ hideAttribution: true }}
-    >
-      <Background color="#334155" gap={20} />
-      <Controls className="!bg-slate-800 !border-slate-600 [&>button]:!bg-slate-700 [&>button]:!border-slate-600 [&>button]:!text-white" />
-      <MiniMap
-        className="!bg-slate-800 !border-slate-600"
-        nodeColor={(node) => getComplexityColor(node.data?.complexityScore as number)}
-        maskColor="rgba(15, 23, 42, 0.7)"
-      />
-    </ReactFlow>
+    <div className="h-full w-full relative" style={{ background: 'radial-gradient(ellipse at center, var(--color-surface) 0%, var(--color-canvas) 70%)' }}>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeClick={handleNodeClick}
+        nodeTypes={nodeTypes}
+        fitView
+        minZoom={0.1}
+        maxZoom={2}
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background
+          color="var(--color-elevated)"
+          gap={24}
+          size={1}
+        />
+        <Controls
+          className="!bg-surface !border !border-default !rounded-lg !shadow-lg [&>button]:!bg-surface [&>button]:!border-default [&>button]:!text-fg-secondary [&>button:hover]:!bg-elevated [&>button:hover]:!text-fg"
+        />
+        <MiniMap
+          className="!bg-surface !border !border-default !rounded-lg"
+          nodeColor={(node) => getNodeColor(node.data?.complexityScore as number)}
+          maskColor="rgba(6, 8, 13, 0.7)"
+        />
+      </ReactFlow>
+      {nodeError && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-md bg-danger/10 border border-danger/30 px-3 py-1.5 text-xs text-danger">
+          {nodeError}
+        </div>
+      )}
+    </div>
   );
 }
 
-function getComplexityColor(score: number): string {
-  if (score < 30) return '#22c55e';  // green
-  if (score < 60) return '#eab308';  // yellow
-  return '#ef4444';                   // red
+function getEdgeStyle(weight: number): React.CSSProperties {
+  if (weight > 5) return {
+    strokeWidth: 3,
+    stroke: 'rgba(34, 211, 238, 0.5)',
+  };
+  if (weight > 2) return {
+    strokeWidth: 2,
+    stroke: 'var(--color-emphasis)',
+  };
+  return {
+    strokeWidth: 1,
+    stroke: 'var(--color-default)',
+    strokeDasharray: '4 3',
+  };
+}
+
+function getNodeColor(score: number): string {
+  if (score >= 60) return '#f85149';
+  if (score >= 30) return '#d29922';
+  return '#3fb950';
 }

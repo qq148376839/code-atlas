@@ -58,7 +58,7 @@ export interface ScanStatus {
 }
 
 export const projectApi = {
-  list: () => api.get('projects').json<Project[]>(),
+  list: () => api.get('projects').json<ProjectWithStats[]>(),
 
   create: (data: { name: string; gitUrl: string; token?: string }) =>
     api.post('projects', { json: data }).json<Project & { scanJob: { id: string; status: string } }>(),
