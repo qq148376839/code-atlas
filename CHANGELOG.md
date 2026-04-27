@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0 - 2026-04-27
+
+### Added — 层级式模块地图
+- 新增 `GET /api/projects/:id/tree?path=` 接口：按目录层级返回子项 + 聚合指标 + 依赖边
+- 文件级 import 解析：从 `files.imports` JSON 构建文件间依赖，聚合到当前层级
+- ModuleNode 双形态：目录卡片（可展开）+ 文件卡片（紧凑）
+- GroupNode 新组件：展开后的目录容器（半透明背景 + 虚线边框）
+- 层级 ELK 布局：支持嵌套 group node 的自动排列
+- 双击目录节点展开/收起，保留上层上下文
+- 边按权重分色分线型：虚线（弱）/实线（中）/动画 cyan（强）
+- Store 扩展：treeCache + expandedPaths 管理展开状态
+
 ## 0.2.0 - 2026-04-27
 
 ### Changed — Frontend Dashboard Overhaul

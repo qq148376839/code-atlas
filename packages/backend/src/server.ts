@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import { ZodError } from 'zod';
 import { projectRoutes } from './routes/projects.js';
 import { moduleRoutes } from './routes/modules.js';
+import { treeRoutes } from './routes/tree.js';
 import { closeDb } from './db/index.js';
 
 const app = Fastify({ logger: true });
@@ -29,6 +30,7 @@ app.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) =>
 // Register routes
 await app.register(projectRoutes);
 await app.register(moduleRoutes);
+await app.register(treeRoutes);
 
 // Health check
 app.get('/api/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));

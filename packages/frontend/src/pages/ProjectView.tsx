@@ -10,27 +10,28 @@ export default function ProjectView() {
   const {
     currentProjectId,
     setCurrentProject,
-    graph,
-    setGraph,
+    treeCache,
+    setTreeData,
     selectedModuleId,
     scanStatus,
     setScanStatus,
   } = useStore();
   const project = useStore(s => s.projects.find(p => p.id === s.currentProjectId));
 
-  const loadGraph = useCallback(async () => {
+  // Load root tree level
+  const loadTree = useCallback(async () => {
     if (!currentProjectId) return;
     try {
-      const data = await projectApi.dependencies(currentProjectId);
-      setGraph(data);
+      const data = await projectApi.tree(currentProjectId, '');
+      setTreeData('', data);
     } catch (err) {
-      console.error('Failed to load graph:', err);
+      console.error('Failed to load tree:', err);
     }
-  }, [currentProjectId, setGraph]);
+  }, [currentProjectId, setTreeData]);
 
   useEffect(() => {
-    loadGraph();
-  }, [loadGraph]);
+    loadTree();
+  }, [loadTree]);
 
   useEffect(() => {
     if (!currentProjectId) return;
@@ -41,7 +42,7 @@ export default function ProjectView() {
       setScanStatus(status);
       if (status.status === 'done') {
         clearInterval(interval);
-        loadGraph();
+        loadTree();
       } else if (status.status === 'error' || status.status === 'idle') {
         clearInterval(interval);
       }
@@ -50,7 +51,7 @@ export default function ProjectView() {
     checkStatus();
     interval = setInterval(checkStatus, 1000);
     return () => clearInterval(interval);
-  }, [currentProjectId, setScanStatus, loadGraph]);
+  }, [currentProjectId, setScanStatus, loadTree]);
 
   const handleRescan = async () => {
     if (!currentProjectId) return;
@@ -112,7 +113,7 @@ export default function ProjectView() {
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1">
-          {graph && graph.nodes.length > 0 ? (
+          {treeCache.has('') && treeCache.get('')!.children.length > 0 ? (
             <ModuleMap />
           ) : (
             <div className="flex items-center justify-center h-full">

@@ -51,6 +51,21 @@ export interface DependencyGraph {
   edges: Array<{ source: string; target: string; weight: number }>;
 }
 
+export interface TreeChild {
+  type: 'directory' | 'file';
+  name: string;
+  path: string;
+  stats: { fileCount: number; lineCount: number; complexityScore: number };
+  childCount?: number;
+  exports?: string[];
+}
+
+export interface TreeResponse {
+  currentPath: string;
+  children: TreeChild[];
+  edges: Array<{ source: string; target: string; weight: number }>;
+}
+
 export interface ScanStatus {
   status: 'cloning' | 'parsing' | 'analyzing' | 'done' | 'error' | 'idle';
   filesTotal?: number;
@@ -82,4 +97,7 @@ export const projectApi = {
     api.get(`projects/${id}/modules/${moduleId}`).json<ModuleDetail>(),
 
   dependencies: (id: string) => api.get(`projects/${id}/dependencies`).json<DependencyGraph>(),
+
+  tree: (id: string, path = '') =>
+    api.get(`projects/${id}/tree`, { searchParams: path ? { path } : {} }).json<TreeResponse>(),
 };
