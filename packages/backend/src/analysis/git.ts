@@ -18,6 +18,9 @@ export async function cloneRepo(
   token: string | null
 ): Promise<{ localPath: string; defaultBranch: string }> {
   const localPath = getProjectPath(projectName);
+
+  // Remove leftover directory from previous failed attempts
+  await rm(localPath, { recursive: true, force: true });
   await mkdir(path.dirname(localPath), { recursive: true });
 
   const authUrl = token ? injectToken(gitUrl, token) : gitUrl;

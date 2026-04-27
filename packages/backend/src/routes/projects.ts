@@ -52,10 +52,10 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     const body = createProjectSchema.parse(request.body);
     const db = getDb();
 
-    // Check name uniqueness
-    const existing = db.prepare('SELECT id FROM projects WHERE name = ?').get(body.name);
+    // If a project with the same name exists (e.g. from a previous failed clone), remove it
+    const existing = db.prepare('SELECT id FROM projects WHERE name = ?').get(body.name) as any;
     if (existing) {
-      return reply.status(409).send({ error: `Project "${body.name}" already exists` });
+      db.prepare('DELETE FROM projects WHERE id = ?').run(existing.id);
     }
 
     const id = nanoid();
