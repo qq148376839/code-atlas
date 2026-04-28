@@ -5,6 +5,7 @@ import { projectRoutes } from './routes/projects.js';
 import { moduleRoutes } from './routes/modules.js';
 import { treeRoutes } from './routes/tree.js';
 import { annotateRoutes } from './routes/annotate.js';
+import { blockRoutes } from './routes/blocks.js';
 import { closeDb } from './db/index.js';
 
 const app = Fastify({ logger: true });
@@ -33,6 +34,7 @@ await app.register(projectRoutes);
 await app.register(moduleRoutes);
 await app.register(treeRoutes);
 await app.register(annotateRoutes);
+await app.register(blockRoutes);
 
 // Health check
 app.get('/api/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));

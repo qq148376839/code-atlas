@@ -69,6 +69,20 @@ export interface TreeResponse {
   edges: Array<{ source: string; target: string; weight: number }>;
 }
 
+export interface FeatureBlock {
+  id: string;
+  name: string;
+  description: string;
+  filePaths: string[];
+  isAuto: boolean;
+}
+
+export interface PromptResponse {
+  prompt: string;
+  blockName: string;
+  fileCount: number;
+}
+
 export interface ScanStatus {
   status: 'cloning' | 'parsing' | 'analyzing' | 'done' | 'error' | 'idle';
   filesTotal?: number;
@@ -109,4 +123,18 @@ export const projectApi = {
 
   annotate: (id: string, path: string, description: string) =>
     api.post(`projects/${id}/annotate`, { json: { path, description } }).json<{ success: boolean }>(),
+
+  blocks: (id: string) => api.get(`projects/${id}/blocks`).json<FeatureBlock[]>(),
+
+  createBlock: (id: string, data: { name: string; description?: string; filePaths: string[] }) =>
+    api.post(`projects/${id}/blocks`, { json: data }).json<FeatureBlock>(),
+
+  updateBlock: (id: string, blockId: string, data: { name?: string; description?: string; filePaths?: string[] }) =>
+    api.patch(`projects/${id}/blocks/${blockId}`, { json: data }).json<FeatureBlock>(),
+
+  deleteBlock: (id: string, blockId: string) =>
+    api.delete(`projects/${id}/blocks/${blockId}`).json<{ success: boolean }>(),
+
+  blockPrompt: (id: string, blockId: string) =>
+    api.get(`projects/${id}/blocks/${blockId}/prompt`).json<PromptResponse>(),
 };

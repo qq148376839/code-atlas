@@ -1,6 +1,7 @@
 import { getDb } from '../db/index.js';
 import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
+import { nanoid } from 'nanoid';
 
 interface FileRow {
   id: string;
@@ -346,6 +347,102 @@ export function computeImpact(projectId: string, targetPath: string): { affected
   return { affectedCount, riskLevel };
 }
 
+// ─── Layer 6: Auto-generate Feature Blocks ───
+
+export function generateFeatureBlocks(projectId: string): void {
+  const db = getDb();
+
+  // Don't overwrite manually edited blocks
+  const manualBlocks = db.prepare(
+    'SELECT id FROM feature_blocks WHERE project_id = ? AND is_auto = 0'
+  ).all(projectId);
+
+  // Remove only auto-generated blocks (manual ones stay)
+  db.prepare('DELETE FROM feature_blocks WHERE project_id = ? AND is_auto = 1').run(projectId);
+
+  const files = db.prepare(
+    'SELECT path, description, role FROM files WHERE project_id = ?'
+  ).all(projectId) as Array<{ path: string; description: string; role: string }>;
+
+  if (files.length === 0) return;
+
+  // Strategy 1: Use existing file_groups as seeds
+  const groups = db.prepare(
+    'SELECT group_name, file_paths FROM file_groups WHERE project_id = ?'
+  ).all(projectId) as Array<{ group_name: string; file_paths: string }>;
+
+  const usedPaths = new Set<string>();
+  const blocks: Array<{ name: string; description: string; filePaths: string[] }> = [];
+
+  for (const group of groups) {
+    const paths: string[] = JSON.parse(group.file_paths);
+    if (paths.length < 2) continue;
+
+    // Generate name from group_name + file descriptions
+    const descriptions = files
+      .filter(f => paths.includes(f.path))
+      .map(f => f.description)
+      .filter(Boolean);
+    const name = group.group_name.charAt(0).toUpperCase() + group.group_name.slice(1);
+    const desc = descriptions.length > 0 ? descriptions.slice(0, 2).join('、') : '';
+
+    blocks.push({ name, description: desc, filePaths: paths });
+    paths.forEach(p => usedPaths.add(p));
+  }
+
+  // Strategy 2: Group ungrouped files by role
+  const roleGroups = new Map<string, string[]>();
+  for (const file of files) {
+    if (usedPaths.has(file.path)) continue;
+    const role = file.role || 'normal';
+    if (role === 'normal') continue; // Skip normal files — too generic
+    if (!roleGroups.has(role)) roleGroups.set(role, []);
+    roleGroups.get(role)!.push(file.path);
+  }
+
+  const ROLE_NAMES: Record<string, string> = {
+    entry: '应用入口',
+    config: '配置',
+    type: '类型定义',
+    utility: '工具函数',
+  };
+
+  for (const [role, paths] of roleGroups) {
+    if (paths.length < 2) continue;
+    const name = ROLE_NAMES[role] || role;
+    blocks.push({ name, description: `${name}相关文件`, filePaths: paths });
+    paths.forEach(p => usedPaths.add(p));
+  }
+
+  // Strategy 3: Remaining ungrouped large files become their own blocks
+  const ungrouped = files.filter(f => !usedPaths.has(f.path) && f.description);
+  // Only create single-file blocks for important files (entry, core, hub)
+  for (const file of ungrouped) {
+    if (['entry', 'core', 'hub'].includes(file.role)) {
+      blocks.push({
+        name: path.basename(file.path, path.extname(file.path)),
+        description: file.description || '',
+        filePaths: [file.path],
+      });
+    }
+  }
+
+  // Write blocks
+  const insert = db.prepare(
+    'INSERT INTO feature_blocks (id, project_id, name, description, file_paths, is_auto) VALUES (?, ?, ?, ?, ?, 1)'
+  );
+
+  for (const block of blocks) {
+    insert.run(
+      nanoid(),
+      projectId,
+      block.name,
+      block.description,
+      JSON.stringify(block.filePaths),
+    );
+  }
+}
+
 // ─── Main entry: run all annotation layers ───
 
 export function runAnnotation(projectId: string, projectRoot: string): void {
@@ -353,4 +450,5 @@ export function runAnnotation(projectId: string, projectRoot: string): void {
   annotateFiles(projectId);
   computeRoles(projectId);
   computeGroups(projectId);
+  generateFeatureBlocks(projectId);
 }

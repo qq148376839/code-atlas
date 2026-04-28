@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 - 2026-04-28
+
+### Added — 功能块 + 提示词生成（AI 驾驶舱 MVP）
+- 功能块系统：将散文件打包为业务级功能单元（如"数据获取"=fetcher+scraper+maccms）
+- 扫描后自动生成功能块（prefix clustering + role 聚类）
+- 一键生成约束提示词：含文件列表、上下游依赖、开发约束，复制给 AI
+- 功能块可编辑：改名/改描述/增删文件
+- ProjectView "功能视图"/"代码视图" toggle 切换
+- API: CRUD `/api/projects/:id/blocks` + `GET blocks/:blockId/prompt`
+- MCP: list_feature_blocks, get_block_prompt, update_feature_block, create_feature_block
+
 ## 0.4.0 - 2026-04-28
 
 ### Added — 智能标注系统（五层语义理解）

@@ -69,6 +69,16 @@ function initSchema(db: Database.Database): void {
       group_name TEXT NOT NULL,
       file_paths TEXT DEFAULT '[]'
     );
+
+    CREATE TABLE IF NOT EXISTS feature_blocks (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT,
+      file_paths TEXT DEFAULT '[]',
+      is_auto INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
   // Migrations for new columns (safe to run multiple times)

@@ -207,6 +207,82 @@ server.tool(
   }
 );
 
+// Tool: list_feature_blocks
+server.tool(
+  'list_feature_blocks',
+  'List all feature blocks for a project — high-level functional groupings of files',
+  { projectId: z.string().describe('Project ID') },
+  async ({ projectId }) => {
+    const blocks = await apiGet(`projects/${projectId}/blocks`);
+    if (blocks.length === 0) return { content: [{ type: 'text', text: '暂无功能块。重新扫描项目可自动生成。' }] };
+
+    let text = `# 功能块 (${blocks.length})\n\n`;
+    for (const b of blocks) {
+      text += `- **${b.name}** [id: ${b.id}]${b.isAuto ? ' (自动)' : ''}\n`;
+      if (b.description) text += `  ${b.description}\n`;
+      text += `  文件: ${b.filePaths.join(', ')}\n\n`;
+    }
+    return { content: [{ type: 'text', text }] };
+  }
+);
+
+// Tool: get_block_prompt
+server.tool(
+  'get_block_prompt',
+  'Generate a constraint prompt for a feature block — includes files, dependencies, and dev constraints',
+  {
+    projectId: z.string().describe('Project ID'),
+    blockId: z.string().describe('Feature block ID'),
+  },
+  async ({ projectId, blockId }) => {
+    const result = await apiGet(`projects/${projectId}/blocks/${blockId}/prompt`);
+    return { content: [{ type: 'text', text: result.prompt }] };
+  }
+);
+
+// Tool: update_feature_block
+server.tool(
+  'update_feature_block',
+  'Update a feature block name, description, or file list',
+  {
+    projectId: z.string().describe('Project ID'),
+    blockId: z.string().describe('Feature block ID'),
+    name: z.string().optional().describe('New name'),
+    description: z.string().optional().describe('New description'),
+    filePaths: z.array(z.string()).optional().describe('New file paths array'),
+  },
+  async ({ projectId, blockId, ...updates }) => {
+    const data: any = {};
+    if (updates.name) data.name = updates.name;
+    if (updates.description) data.description = updates.description;
+    if (updates.filePaths) data.filePaths = updates.filePaths;
+
+    const res = await fetch(`${API_BASE}/api/projects/${projectId}/blocks/${blockId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    return { content: [{ type: 'text', text: `已更新功能块 "${result.name}"` }] };
+  }
+);
+
+// Tool: create_feature_block
+server.tool(
+  'create_feature_block',
+  'Create a new feature block grouping files into a functional unit',
+  {
+    projectId: z.string().describe('Project ID'),
+    name: z.string().describe('Block name (e.g. "数据获取")'),
+    description: z.string().optional().describe('What this feature does'),
+    filePaths: z.array(z.string()).describe('File paths to include'),
+  },
+  async ({ projectId, name, description, filePaths }) => {
+    const result = await apiPost(`projects/${projectId}/blocks`, { name, description, filePaths });
+    return { content: [{ type: 'text', text: `已创建功能块 "${result.name}" (${result.filePaths.length} 个文件)` }] };
+  }
+);
+
 // Start
 const transport = new StdioServerTransport();
 await server.connect(transport);

@@ -4,6 +4,7 @@ import { useStore } from '../hooks/useStore';
 import { projectApi } from '../api/client';
 import ModuleMap from '../components/ModuleMap';
 import ModuleDetailPanel from '../components/ModuleDetail';
+import FeatureView from '../components/FeatureView';
 import StatsCard from '../components/StatsCard';
 
 export default function ProjectView() {
@@ -60,6 +61,7 @@ export default function ProjectView() {
   };
 
   const isScanning = scanStatus && scanStatus.status !== 'idle' && scanStatus.status !== 'done';
+  const [viewMode, setViewMode] = useState<'code' | 'feature'>('feature');
 
   return (
     <div className="h-screen flex flex-col bg-canvas">
@@ -84,6 +86,20 @@ export default function ProjectView() {
           </div>
           <div className="flex items-center gap-3">
             {isScanning && <ScanBadge status={scanStatus!} />}
+            <div className="flex rounded-md bg-elevated border border-default p-0.5">
+              <button
+                onClick={() => setViewMode('feature')}
+                className={`px-2 py-0.5 text-[11px] rounded transition-colors ${viewMode === 'feature' ? 'bg-overlay text-fg' : 'text-fg-muted hover:text-fg-secondary'}`}
+              >
+                功能视图
+              </button>
+              <button
+                onClick={() => setViewMode('code')}
+                className={`px-2 py-0.5 text-[11px] rounded transition-colors ${viewMode === 'code' ? 'bg-overlay text-fg' : 'text-fg-muted hover:text-fg-secondary'}`}
+              >
+                代码视图
+              </button>
+            </div>
             <McpCopyButton projectId={currentProjectId!} />
             <button
               onClick={handleRescan}
@@ -117,7 +133,9 @@ export default function ProjectView() {
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1">
-          {treeCache.has('') && treeCache.get('')!.children.length > 0 ? (
+          {viewMode === 'feature' ? (
+            <FeatureView />
+          ) : treeCache.has('') && treeCache.get('')!.children.length > 0 ? (
             <ModuleMap />
           ) : (
             <div className="flex items-center justify-center h-full">
