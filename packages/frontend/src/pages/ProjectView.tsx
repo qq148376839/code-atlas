@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../hooks/useStore';
 import { projectApi } from '../api/client';
@@ -84,6 +84,7 @@ export default function ProjectView() {
           </div>
           <div className="flex items-center gap-3">
             {isScanning && <ScanBadge status={scanStatus!} />}
+            <McpCopyButton projectId={currentProjectId!} />
             <button
               onClick={handleRescan}
               disabled={!!isScanning}
@@ -135,6 +136,38 @@ export default function ProjectView() {
         )}
       </div>
     </div>
+  );
+}
+
+/* ─── MCP Copy Button ─── */
+function McpCopyButton({ projectId }: { projectId: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    const apiBase = window.location.origin;
+    const config = JSON.stringify({
+      mcpServers: {
+        'code-atlas': {
+          command: 'npx',
+          args: ['code-atlas-mcp', `--api=${apiBase}`],
+          env: { CODE_ATLAS_PROJECT: projectId },
+        },
+      },
+    }, null, 2);
+
+    navigator.clipboard.writeText(config).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="rounded-md border border-accent/30 bg-accent/5 px-2.5 py-1 text-xs text-accent hover:bg-accent/10 transition-colors"
+    >
+      {copied ? '已复制' : '接入 AI'}
+    </button>
   );
 }
 

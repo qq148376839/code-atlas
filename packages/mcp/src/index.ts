@@ -9,7 +9,7 @@ const API_BASE = process.argv.find(a => a.startsWith('--api='))?.split('=')[1]
 
 const server = new McpServer({
   name: 'code-atlas',
-  version: '0.1.0',
+  version: '0.4.0',
 });
 
 async function apiGet(path: string): Promise<any> {
@@ -21,158 +21,185 @@ async function apiGet(path: string): Promise<any> {
   return res.json();
 }
 
+async function apiPost(path: string, body: any): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
 // Tool: get_projects
 server.tool(
   'get_projects',
-  'List all registered projects in code-atlas',
+  'List all registered projects with summaries and stats',
   {},
   async () => {
     const projects = await apiGet('projects');
-    const summary = projects.map((p: any) =>
-      `- ${p.name} (${p.gitUrl}) [${p.lastScannedAt ? '已扫描' : '未扫描'}]`
-    ).join('\n');
-    return { content: [{ type: 'text', text: summary || '暂无注册项目' }] };
+    const lines = projects.map((p: any) => {
+      const stats = p.stats ? `${p.stats.moduleCount}模块 ${p.stats.totalFiles}文件 ${p.stats.totalLines}行` : '未扫描';
+      const summary = p.summary ? ` — ${p.summary}` : '';
+      return `- **${p.name}** [id: ${p.id}] (${stats})${summary}`;
+    });
+    return { content: [{ type: 'text', text: lines.join('\n') || '暂无注册项目' }] };
   }
 );
 
 // Tool: get_project_overview
 server.tool(
   'get_project_overview',
-  'Get project overview with module list and statistics',
+  'Get project overview: summary, stats, and directory tree with descriptions and roles',
   { projectId: z.string().describe('Project ID') },
   async ({ projectId }) => {
     const project = await apiGet(`projects/${projectId}`);
-    const modules = await apiGet(`projects/${projectId}/modules`);
+    const tree = await apiGet(`projects/${projectId}/tree`);
 
     let text = `# ${project.name}\n`;
-    text += `Git: ${project.gitUrl}\n`;
+    if (project.summary) text += `> ${project.summary}\n`;
+    text += `\nGit: ${project.gitUrl}\n`;
     text += `统计: ${project.stats.moduleCount} 模块, ${project.stats.totalFiles} 文件, ${project.stats.totalLines} 行代码\n\n`;
-    text += `## 模块列表\n`;
-    for (const m of modules) {
-      const complexity = m.complexityScore < 30 ? '简单' : m.complexityScore < 60 ? '中等' : '复杂';
-      text += `- **${m.name}** (${m.fileCount}文件, ${m.lineCount}行, ${complexity})\n`;
+
+    text += `## 顶层结构\n`;
+    for (const child of tree.children) {
+      const icon = child.type === 'directory' ? '📁' : '📄';
+      const desc = child.description ? ` — ${child.description}` : '';
+      const role = child.role && child.role !== 'normal' ? ` [${child.role}]` : '';
+      text += `- ${icon} **${child.name}** (${child.stats.fileCount}文件, ${child.stats.lineCount}行, 复杂度${child.stats.complexityScore})${role}${desc}\n`;
     }
+
+    if (tree.edges.length > 0) {
+      text += `\n## 依赖关系\n`;
+      for (const e of tree.edges) {
+        text += `- ${e.source} → ${e.target} (×${e.weight})\n`;
+      }
+    }
+
     return { content: [{ type: 'text', text }] };
   }
 );
 
-// Tool: get_module_detail
+// Tool: get_tree
 server.tool(
-  'get_module_detail',
-  'Get detailed info about a specific module including files and exports',
+  'get_tree',
+  'Browse directory tree at any level — shows files/subdirs with descriptions, roles, and dependencies',
   {
     projectId: z.string().describe('Project ID'),
-    moduleId: z.string().describe('Module ID'),
+    path: z.string().default('').describe('Directory path to browse (empty = root)'),
   },
-  async ({ projectId, moduleId }) => {
-    const detail = await apiGet(`projects/${projectId}/modules/${moduleId}`);
+  async ({ projectId, path }) => {
+    const tree = await apiGet(`projects/${projectId}/tree${path ? `?path=${encodeURIComponent(path)}` : ''}`);
 
-    let text = `# 模块: ${detail.name}\n`;
-    text += `路径: ${detail.path}\n`;
-    text += `统计: ${detail.fileCount}文件, ${detail.lineCount}行, 复杂度${Math.round(detail.complexityScore)}\n\n`;
-
-    if (detail.dependsOn.length > 0) {
-      text += `## 依赖\n`;
-      for (const d of detail.dependsOn) text += `- → ${d.targetModule} (×${d.weight})\n`;
-      text += '\n';
+    let text = `# 目录: ${path || '/'}\n\n`;
+    for (const child of tree.children) {
+      const icon = child.type === 'directory' ? '📁' : '📄';
+      const desc = child.description ? ` — ${child.description}` : '';
+      const role = child.role && child.role !== 'normal' ? ` [${child.role}]` : '';
+      const extra = child.type === 'directory' ? ` (${child.childCount}项)` : '';
+      text += `- ${icon} **${child.name}**${extra} ${child.stats.lineCount}行 复杂度${child.stats.complexityScore}${role}${desc}\n`;
     }
 
-    if (detail.dependedBy.length > 0) {
-      text += `## 被依赖\n`;
-      for (const d of detail.dependedBy) text += `- ← ${d.sourceModule} (×${d.weight})\n`;
-      text += '\n';
-    }
-
-    text += `## 文件列表\n`;
-    for (const f of detail.files) {
-      text += `- ${f.path} (${f.lineCount}行)`;
-      if (f.exports.length > 0) text += ` [导出: ${f.exports.join(', ')}]`;
-      text += '\n';
+    if (tree.edges.length > 0) {
+      text += `\n## 依赖\n`;
+      for (const e of tree.edges) {
+        text += `- ${e.source} → ${e.target} (×${e.weight})\n`;
+      }
     }
 
     return { content: [{ type: 'text', text }] };
   }
 );
 
-// Tool: get_dependencies
+// Tool: get_node_detail
 server.tool(
-  'get_dependencies',
-  'Get the full dependency graph between modules',
-  { projectId: z.string().describe('Project ID') },
-  async ({ projectId }) => {
-    const graph = await apiGet(`projects/${projectId}/dependencies`);
+  'get_node_detail',
+  'Get detailed info about a file or directory: description, role, dependencies, impact analysis',
+  {
+    projectId: z.string().describe('Project ID'),
+    path: z.string().describe('File or directory path (e.g. "src/routes.ts" or "src/core")'),
+  },
+  async ({ projectId, path }) => {
+    const detail = await apiGet(`projects/${projectId}/node-detail?path=${encodeURIComponent(path)}`);
 
-    let text = `# 依赖关系图\n\n`;
-    text += `模块数: ${graph.nodes.length}\n`;
-    text += `依赖边数: ${graph.edges.length}\n\n`;
+    let text = `# ${detail.name}\n`;
+    text += `路径: ${detail.path}\n`;
+    if (detail.description) text += `描述: ${detail.description}\n`;
+    if (detail.role && detail.role !== 'normal') text += `角色: ${detail.role}\n`;
+    text += `统计: ${detail.fileCount}文件, ${detail.lineCount}行, 复杂度${Math.round(detail.complexityScore)}\n`;
 
-    // Find isolated modules
-    const connected = new Set<string>();
-    for (const e of graph.edges) {
-      connected.add(e.source);
-      connected.add(e.target);
+    if (detail.impact) {
+      text += `影响: 修改此文件影响 ${detail.impact.affectedCount} 个下游文件 (风险: ${detail.impact.riskLevel})\n`;
     }
-    const isolated = graph.nodes.filter((n: any) => !connected.has(n.id));
 
-    if (graph.edges.length > 0) {
-      text += `## 依赖关系\n`;
-      // Build name lookup
-      const nameMap = new Map(graph.nodes.map((n: any) => [n.id, n.name]));
-      for (const e of graph.edges) {
-        text += `- ${nameMap.get(e.source)} → ${nameMap.get(e.target)} (强度: ${e.weight})\n`;
+    if (detail.groups && detail.groups.length > 0) {
+      text += `分组: ${detail.groups.join(', ')}\n`;
+    }
+
+    if (detail.dependsOn?.length > 0) {
+      text += `\n## 依赖 (${detail.dependsOn.length})\n`;
+      for (const d of detail.dependsOn) text += `- → ${d.targetModule} (×${d.weight})\n`;
+    }
+
+    if (detail.dependedBy?.length > 0) {
+      text += `\n## 被依赖 (${detail.dependedBy.length})\n`;
+      for (const d of detail.dependedBy) text += `- ← ${d.sourceModule} (×${d.weight})\n`;
+    }
+
+    if (detail.files?.length > 0 && detail.files.length <= 20) {
+      text += `\n## 文件\n`;
+      for (const f of detail.files) {
+        text += `- ${f.path} (${f.lineCount}行)`;
+        if (f.exports.length > 0) text += ` [${f.exports.slice(0, 5).join(', ')}]`;
+        text += '\n';
       }
-      text += '\n';
-    }
-
-    if (isolated.length > 0) {
-      text += `## 孤立模块（无依赖关系，可能是死代码）\n`;
-      for (const n of isolated) text += `- ${n.name}\n`;
     }
 
     return { content: [{ type: 'text', text }] };
+  }
+);
+
+// Tool: annotate_module
+server.tool(
+  'annotate_module',
+  'Set or update the description for a file or directory in code-atlas',
+  {
+    projectId: z.string().describe('Project ID'),
+    path: z.string().describe('File or directory path'),
+    description: z.string().describe('Human-readable description of what this module does'),
+  },
+  async ({ projectId, path, description }) => {
+    await apiPost(`projects/${projectId}/annotate`, { path, description });
+    return { content: [{ type: 'text', text: `已更新 "${path}" 的描述为: ${description}` }] };
   }
 );
 
 // Tool: get_impact_analysis
 server.tool(
   'get_impact_analysis',
-  'Analyze what modules would be affected if a given module is changed',
+  'Analyze what files would be affected if a given file/module is changed (transitive)',
   {
     projectId: z.string().describe('Project ID'),
-    moduleName: z.string().describe('Module name to analyze impact for'),
+    path: z.string().describe('File path to analyze (e.g. "src/core/types.ts")'),
   },
-  async ({ projectId, moduleName }) => {
-    const graph = await apiGet(`projects/${projectId}/dependencies`);
-    const nameMap = new Map(graph.nodes.map((n: any) => [n.id, n.name]));
-    const idMap = new Map(graph.nodes.map((n: any) => [n.name, n.id]));
+  async ({ projectId, path }) => {
+    const detail = await apiGet(`projects/${projectId}/node-detail?path=${encodeURIComponent(path)}`);
 
-    const targetId = idMap.get(moduleName);
-    if (!targetId) {
-      return { content: [{ type: 'text', text: `模块 "${moduleName}" 不存在` }], isError: true };
-    }
-
-    // Find all modules that depend on this module (direct + transitive)
-    const affected = new Set<string>();
-    const queue = [targetId];
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      for (const e of graph.edges) {
-        if (e.target === current && !affected.has(e.source)) {
-          affected.add(e.source);
-          queue.push(e.source);
-        }
-      }
-    }
-
-    let text = `# 变更影响分析: ${moduleName}\n\n`;
-    if (affected.size === 0) {
-      text += `没有其他模块依赖 ${moduleName}，修改此模块不会影响其他模块。\n`;
+    let text = `# 变更影响分析: ${path}\n\n`;
+    if (!detail.impact || detail.impact.affectedCount === 0) {
+      text += `没有其他文件依赖此路径，修改不会产生下游影响。\n`;
     } else {
-      text += `修改 ${moduleName} 会影响以下 ${affected.size} 个模块:\n\n`;
-      for (const id of affected) {
-        const name = nameMap.get(id) || id;
-        const edge = graph.edges.find((e: any) => e.source === id && e.target === targetId);
-        text += `- **${name}**${edge ? ` (依赖强度: ${edge.weight})` : ' (间接依赖)'}\n`;
+      text += `风险等级: **${detail.impact.riskLevel}**\n`;
+      text += `修改此文件会影响 **${detail.impact.affectedCount}** 个下游文件。\n\n`;
+    }
+
+    if (detail.dependedBy?.length > 0) {
+      text += `## 直接被依赖\n`;
+      for (const d of detail.dependedBy) {
+        text += `- ${d.sourceModule} (×${d.weight})\n`;
       }
     }
 
