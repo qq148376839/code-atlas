@@ -23,6 +23,7 @@ export interface ProjectWithStats extends Project {
     totalLines: number;
     dependencyCount: number;
   };
+  summary?: string | null;
 }
 
 export interface ModuleSummary {
@@ -58,6 +59,8 @@ export interface TreeChild {
   stats: { fileCount: number; lineCount: number; complexityScore: number };
   childCount?: number;
   exports?: string[];
+  description?: string;
+  role?: string;
 }
 
 export interface TreeResponse {
@@ -102,5 +105,8 @@ export const projectApi = {
     api.get(`projects/${id}/tree`, { searchParams: path ? { path } : {} }).json<TreeResponse>(),
 
   nodeDetail: (id: string, path: string) =>
-    api.get(`projects/${id}/node-detail`, { searchParams: { path } }).json<ModuleDetail>(),
+    api.get(`projects/${id}/node-detail`, { searchParams: { path } }).json<ModuleDetail & { description?: string; role?: string; impact?: { affectedCount: number; riskLevel: string }; groups?: string[] }>(),
+
+  annotate: (id: string, path: string, description: string) =>
+    api.post(`projects/${id}/annotate`, { json: { path, description } }).json<{ success: boolean }>(),
 };

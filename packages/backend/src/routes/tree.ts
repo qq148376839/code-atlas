@@ -8,6 +8,8 @@ interface FileRow {
   line_count: number;
   exports: string;
   imports: string;
+  description: string | null;
+  role: string | null;
 }
 
 interface TreeChild {
@@ -17,6 +19,8 @@ interface TreeChild {
   stats: { fileCount: number; lineCount: number; complexityScore: number };
   childCount?: number;
   exports?: string[];
+  description?: string;
+  role?: string;
 }
 
 interface TreeEdge {
@@ -37,7 +41,7 @@ export async function treeRoutes(app: FastifyInstance): Promise<void> {
     if (!project) return reply.status(404).send({ error: 'Project not found' });
 
     const allFiles = db.prepare(
-      'SELECT path, language, line_count, exports, imports FROM files WHERE project_id = ?'
+      'SELECT path, language, line_count, exports, imports, description, role FROM files WHERE project_id = ?'
     ).all(id) as FileRow[];
 
     const allFilePaths = new Set(allFiles.map(f => f.path));
@@ -91,6 +95,27 @@ export async function treeRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
+    // Get description and role
+    const primaryFile = isFile ? nodeFiles[0] : null;
+    const description = primaryFile?.description || aggregateDescription(nodeFiles);
+    const role = primaryFile?.role || 'normal';
+
+    // Layer 5: Impact analysis
+    const { computeImpact } = await import('../analysis/annotator.js');
+    const impact = computeImpact(id, nodePath);
+
+    // Layer 4: Groups
+    const groups = db.prepare(
+      'SELECT group_name, file_paths FROM file_groups WHERE project_id = ? AND parent_path = ?'
+    ).all(id, path.dirname(nodePath)) as Array<{ group_name: string; file_paths: string }>;
+
+    const nodeGroups = groups
+      .filter(g => {
+        const paths: string[] = JSON.parse(g.file_paths);
+        return paths.includes(nodePath);
+      })
+      .map(g => g.group_name);
+
     return {
       id: nodePath,
       name: path.basename(nodePath),
@@ -98,6 +123,10 @@ export async function treeRoutes(app: FastifyInstance): Promise<void> {
       fileCount,
       lineCount: totalLines,
       complexityScore: rawScore,
+      description,
+      role,
+      impact,
+      groups: nodeGroups,
       files: nodeFiles.map(f => ({
         path: f.path,
         language: f.language,
@@ -120,7 +149,7 @@ export async function treeRoutes(app: FastifyInstance): Promise<void> {
 
     // Get all files for this project
     const allFiles = db.prepare(
-      'SELECT path, language, line_count, exports, imports FROM files WHERE project_id = ?'
+      'SELECT path, language, line_count, exports, imports, description, role FROM files WHERE project_id = ?'
     ).all(id) as FileRow[];
 
     // Filter files under the requested path
@@ -172,12 +201,26 @@ export async function treeRoutes(app: FastifyInstance): Promise<void> {
       const rawScore = (fileCount * 0.3 + Math.min(totalLines / 100, 100) * 0.3 + Math.min(avgLines / 50, 100) * 0.4);
       const complexityScore = Math.min(Math.round(rawScore), 100);
 
+      // Aggregate description from child file descriptions
+      const descriptions = files
+        .map(f => f.description)
+        .filter((d): d is string => !!d && d !== '');
+      const descWords = new Map<string, number>();
+      for (const desc of descriptions) {
+        for (const word of desc.split(/[/·,，、]/).map(w => w.trim()).filter(Boolean)) {
+          descWords.set(word, (descWords.get(word) || 0) + 1);
+        }
+      }
+      const topWords = [...descWords.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => e[0]);
+      const dirDescription = topWords.length > 0 ? topWords.join('、') : undefined;
+
       children.push({
         type: 'directory',
         name: path.basename(dirPath),
         path: dirPath,
         stats: { fileCount, lineCount: totalLines, complexityScore },
         childCount: childNames.size,
+        description: dirDescription,
       });
     }
 
@@ -193,6 +236,8 @@ export async function treeRoutes(app: FastifyInstance): Promise<void> {
         path: file.path,
         stats: { fileCount: 1, lineCount, complexityScore },
         exports: JSON.parse(file.exports || '[]'),
+        description: file.description || undefined,
+        role: file.role || undefined,
       });
     }
 
@@ -299,6 +344,18 @@ function resolveImport(
   }
 
   return null;
+}
+
+function aggregateDescription(files: FileRow[]): string {
+  const descriptions = files.map(f => f.description).filter((d): d is string => !!d && d !== '');
+  const words = new Map<string, number>();
+  for (const desc of descriptions) {
+    for (const word of desc.split(/[/·,，、]/).map(w => w.trim()).filter(Boolean)) {
+      words.set(word, (words.get(word) || 0) + 1);
+    }
+  }
+  const top = [...words.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => e[0]);
+  return top.length > 0 ? top.join('、') : '';
 }
 
 /**

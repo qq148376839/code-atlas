@@ -105,6 +105,8 @@ function ModuleMapInner() {
               complexityScore: child.stats.complexityScore,
               childCount: child.childCount,
               relativeSize: Math.min(child.stats.lineCount / maxLines, 1),
+              description: child.description,
+              role: child.role,
             },
           });
         }
@@ -185,7 +187,8 @@ function ModuleMapInner() {
 
         try {
           const detail = await projectApi.nodeDetail(currentProjectId, nodePath);
-          setSelectedModule(node.id, detail);
+          const { description, role, impact, groups, ...moduleData } = detail;
+          setSelectedModule(node.id, moduleData, { description, role, impact, groups });
         } catch {
           setNodeError('加载详情失败');
           setTimeout(() => setNodeError(null), 3000);

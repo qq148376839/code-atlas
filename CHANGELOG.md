@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0 - 2026-04-28
+
+### Added — 智能标注系统（五层语义理解）
+- Layer 1: 项目概述自动生成（package.json + README + 框架检测）
+- Layer 2: 文件功能描述（模板规则引擎：文件名模式 + 导出特征 + 动词映射）
+- Layer 3: 角色标签（entry/hub/core/utility/type/config/leaf）基于图分析
+- Layer 4: 逻辑分组（前缀聚类，同目录文件 >6 时触发）
+- Layer 5: 影响半径（BFS 传递依赖计算，实时返回）
+- `POST /api/projects/:id/annotate` 手动修改描述接口
+- 前端节点卡片显示描述 + 彩色角色 tag
+- 详情面板描述可编辑（铅笔图标 → inline input → 保存）
+- 详情面板显示影响半径 + 风险等级
+- ProjectView header 显示项目一句话概述
+- DB migration: files/modules 加 description/role 字段, 新增 file_groups 表
+
 ## 0.3.0 - 2026-04-27
 
 ### Added — 层级式模块地图

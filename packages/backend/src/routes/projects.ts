@@ -24,7 +24,7 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     const rows = db.prepare(`
       SELECT
         p.id, p.name, p.git_url, p.local_path, p.default_branch,
-        p.last_scanned_at, p.scan_error, p.created_at,
+        p.last_scanned_at, p.scan_error, p.created_at, p.summary,
         COUNT(DISTINCT m.id) as module_count,
         COALESCE(SUM(m.file_count), 0) as total_files,
         COALESCE(SUM(m.line_count), 0) as total_lines,
@@ -44,6 +44,7 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
         totalLines: row.total_lines,
         dependencyCount: row.dependency_count,
       },
+      summary: row.summary || null,
     }));
   });
 
@@ -108,7 +109,7 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
       WHERE m.project_id = ?
     `).get(id) as any;
 
-    return { ...formatProject(project), stats };
+    return { ...formatProject(project), stats, summary: project.summary || null };
   });
 
   // PATCH /api/projects/:id - Update project

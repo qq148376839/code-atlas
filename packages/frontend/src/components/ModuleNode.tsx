@@ -9,6 +9,8 @@ interface ModuleNodeData {
   complexityScore: number;
   childCount?: number;
   relativeSize: number;
+  description?: string;
+  role?: string;
 }
 
 export default function ModuleNode({ data, selected }: NodeProps) {
@@ -21,9 +23,9 @@ export default function ModuleNode({ data, selected }: NodeProps) {
 
 /* ─── Directory (collapsed) ─── */
 function DirectoryNode({ data, selected }: { data: ModuleNodeData; selected?: boolean }) {
-  const { name, fileCount, lineCount, complexityScore, childCount, relativeSize } = data;
+  const { name, fileCount, lineCount, complexityScore, childCount, relativeSize, description, role } = data;
   const level = getLevel(complexityScore);
-  const width = 180 + relativeSize * 60;
+  const width = 200 + relativeSize * 60;
 
   return (
     <>
@@ -36,13 +38,17 @@ function DirectoryNode({ data, selected }: { data: ModuleNodeData; selected?: bo
       >
         <div className={`h-[3px] w-full ${level.barColor}`} />
         <div className="px-3 py-2.5">
-          <div className="flex items-center gap-2 mb-1.5">
+          <div className="flex items-center gap-2 mb-1">
             <div className={`h-2 w-2 rounded-full shrink-0 ${level.dotColor}`} />
             <span className="text-sm font-medium text-fg truncate">{name}/</span>
+            {role && role !== 'normal' && <RoleTag role={role} />}
             {childCount != null && (
               <span className="ml-auto text-[10px] text-fg-muted font-mono bg-elevated rounded px-1">{childCount}</span>
             )}
           </div>
+          {description && (
+            <div className="text-[11px] text-fg-secondary truncate mb-1.5 pl-4">{description}</div>
+          )}
           <div className="flex items-center gap-2.5 text-xs text-fg-secondary font-mono mb-1.5">
             <span>{fileCount} 文件</span>
             <span>{formatLines(lineCount)} 行</span>
@@ -60,9 +66,9 @@ function DirectoryNode({ data, selected }: { data: ModuleNodeData; selected?: bo
 
 /* ─── File ─── */
 function FileNode({ data, selected }: { data: ModuleNodeData; selected?: boolean }) {
-  const { name, lineCount, complexityScore } = data;
+  const { name, lineCount, complexityScore, description, role } = data;
   const level = getLevel(complexityScore);
-  const width = 150 + data.relativeSize * 40;
+  const width = 160 + data.relativeSize * 40;
 
   return (
     <>
@@ -78,7 +84,11 @@ function FileNode({ data, selected }: { data: ModuleNodeData; selected?: boolean
           <div className="flex items-center gap-1.5 mb-1">
             <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${level.dotColor}`} />
             <span className="text-xs text-fg truncate">{name}</span>
+            {role && role !== 'normal' && <RoleTag role={role} size="sm" />}
           </div>
+          {description && (
+            <div className="text-[10px] text-fg-secondary truncate mb-1 pl-3">{description}</div>
+          )}
           <div className="flex items-center gap-2 text-[10px] text-fg-muted font-mono">
             <span>{formatLines(lineCount)} 行</span>
             <span className={level.textColor}>{Math.round(complexityScore)}</span>
@@ -88,6 +98,24 @@ function FileNode({ data, selected }: { data: ModuleNodeData; selected?: boolean
       <Handle type="source" position={Position.Bottom} className="!bg-fg-muted !w-1 !h-1 !border-0" />
     </>
   );
+}
+
+/* ─── Role Tag ─── */
+const ROLE_CONFIG: Record<string, { label: string; style: string }> = {
+  entry: { label: '入口', style: 'bg-info/10 text-info' },
+  hub: { label: '枢纽', style: 'bg-danger/10 text-danger' },
+  core: { label: '核心', style: 'bg-warn/10 text-warn' },
+  utility: { label: '工具', style: 'bg-ok/10 text-ok' },
+  type: { label: '类型', style: 'bg-fg-muted/10 text-fg-muted' },
+  config: { label: '配置', style: 'bg-fg-muted/10 text-fg-muted' },
+  leaf: { label: '叶子', style: 'bg-accent-purple/10 text-accent-purple' },
+};
+
+function RoleTag({ role, size = 'md' }: { role: string; size?: 'sm' | 'md' }) {
+  const config = ROLE_CONFIG[role];
+  if (!config) return null;
+  const cls = size === 'sm' ? 'text-[8px] px-1 py-0' : 'text-[9px] px-1.5 py-0.5';
+  return <span className={`rounded font-medium shrink-0 ${cls} ${config.style}`}>{config.label}</span>;
 }
 
 /* ─── Helpers ─── */

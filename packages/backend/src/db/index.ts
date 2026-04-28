@@ -61,7 +61,27 @@ function initSchema(db: Database.Database): void {
       weight INTEGER DEFAULT 1,
       UNIQUE(source_module_id, target_module_id)
     );
+
+    CREATE TABLE IF NOT EXISTS file_groups (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      parent_path TEXT NOT NULL,
+      group_name TEXT NOT NULL,
+      file_paths TEXT DEFAULT '[]'
+    );
   `);
+
+  // Migrations for new columns (safe to run multiple times)
+  const migrations = [
+    `ALTER TABLE projects ADD COLUMN summary TEXT`,
+    `ALTER TABLE files ADD COLUMN description TEXT`,
+    `ALTER TABLE files ADD COLUMN role TEXT DEFAULT 'normal'`,
+    `ALTER TABLE files ADD COLUMN is_manual INTEGER DEFAULT 0`,
+    `ALTER TABLE modules ADD COLUMN description TEXT`,
+  ];
+  for (const sql of migrations) {
+    try { db.exec(sql); } catch { /* column already exists */ }
+  }
 }
 
 export function closeDb(): void {

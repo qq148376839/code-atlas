@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../hooks/useStore';
+import { projectApi } from '../api/client';
 
 type Tab = 'overview' | 'deps' | 'files';
 
@@ -66,13 +67,67 @@ export default function ModuleDetailPanel() {
 
 /* ─── Overview Tab ─── */
 function OverviewTab() {
-  const { selectedModule } = useStore();
+  const { selectedModule, selectedNodeMeta, currentProjectId, selectedModuleId } = useStore();
+  const [editing, setEditing] = useState(false);
+  const [desc, setDesc] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
   if (!selectedModule) return null;
 
   const level = getLevel(selectedModule.complexityScore);
+  const meta = selectedNodeMeta;
+
+  const handleEditStart = () => {
+    setDesc(meta?.description || '');
+    setEditing(true);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  const handleSave = async () => {
+    setEditing(false);
+    if (!currentProjectId || !selectedModuleId) return;
+    const nodePath = (selectedModule as any).path || selectedModuleId;
+    if (desc.trim()) {
+      try { await projectApi.annotate(currentProjectId, nodePath, desc.trim()); } catch { /* ignore */ }
+    }
+  };
 
   return (
     <div className="space-y-4">
+      {/* Description (editable) */}
+      <div className="rounded-md border border-default bg-elevated p-2.5">
+        {editing ? (
+          <input
+            ref={inputRef}
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
+            className="w-full bg-transparent text-xs text-fg outline-none"
+            placeholder="输入功能描述..."
+          />
+        ) : (
+          <div className="flex items-center gap-2 cursor-pointer group" onClick={handleEditStart}>
+            <span className="text-xs text-fg-secondary flex-1">{meta?.description || '点击添加描述'}</span>
+            <svg width="10" height="10" viewBox="0 0 10 10" className="text-fg-muted group-hover:text-fg-secondary shrink-0">
+              <path d="M7.5 1.5l1 1-5.5 5.5H2V7L7.5 1.5z" stroke="currentColor" fill="none" strokeWidth="0.8"/>
+            </svg>
+          </div>
+        )}
+      </div>
+
+      {/* Role + Impact */}
+      {(meta?.role && meta.role !== 'normal') || (meta?.impact && meta.impact.affectedCount > 0) ? (
+        <div className="flex items-center gap-2 flex-wrap">
+          {meta?.role && meta.role !== 'normal' && <RoleTagDetail role={meta.role} />}
+          {meta?.impact && meta.impact.affectedCount > 0 && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded ${meta.impact.riskLevel === 'high' ? 'bg-danger/10 text-danger' : meta.impact.riskLevel === 'medium' ? 'bg-warn/10 text-warn' : 'bg-fg-muted/10 text-fg-muted'}`}>
+              影响 {meta.impact.affectedCount} 个文件
+            </span>
+          )}
+        </div>
+      ) : null}
+
       {/* Stats grid */}
       <div className="grid grid-cols-3 gap-2">
         <StatBlock label="文件" value={selectedModule.fileCount} />
@@ -234,4 +289,20 @@ function getLevel(score: number) {
   if (score >= 60) return { color: 'text-danger', textColor: 'text-danger', bgColor: 'bg-danger' };
   if (score >= 30) return { color: 'text-warn', textColor: 'text-warn', bgColor: 'bg-warn' };
   return { color: 'text-ok', textColor: 'text-ok', bgColor: 'bg-ok' };
+}
+
+const ROLE_LABELS: Record<string, { label: string; style: string }> = {
+  entry: { label: '入口', style: 'bg-info/10 text-info' },
+  hub: { label: '枢纽', style: 'bg-danger/10 text-danger' },
+  core: { label: '核心', style: 'bg-warn/10 text-warn' },
+  utility: { label: '工具', style: 'bg-ok/10 text-ok' },
+  type: { label: '类型', style: 'bg-fg-muted/10 text-fg-muted' },
+  config: { label: '配置', style: 'bg-fg-muted/10 text-fg-muted' },
+  leaf: { label: '叶子', style: 'bg-accent-purple/10 text-accent-purple' },
+};
+
+function RoleTagDetail({ role }: { role: string }) {
+  const cfg = ROLE_LABELS[role];
+  if (!cfg) return null;
+  return <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${cfg.style}`}>{cfg.label}</span>;
 }

@@ -78,6 +78,9 @@ export default function ProjectView() {
             </button>
             <div className="h-4 w-px bg-default" />
             <h1 className="text-sm font-medium text-fg">{project?.name ?? ''}</h1>
+            {(project as any)?.summary && (
+              <span className="text-[11px] text-fg-muted hidden sm:inline truncate max-w-[300px]">{(project as any).summary}</span>
+            )}
           </div>
           <div className="flex items-center gap-3">
             {isScanning && <ScanBadge status={scanStatus!} />}

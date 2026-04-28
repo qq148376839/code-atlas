@@ -5,6 +5,7 @@ import { parseFile } from './parser.js';
 import { detectModules } from './module-detector.js';
 import { resolveDependencies } from './dependency-resolver.js';
 import { loadPathAliases } from './tsconfig-resolver.js';
+import { runAnnotation } from './annotator.js';
 import type { ScanJob } from '../types/index.js';
 
 // In-memory scan job tracking with TTL cleanup
@@ -216,6 +217,9 @@ async function doAnalysis(job: ScanJob, projectRoot: string): Promise<void> {
   });
 
   writeAll();
+
+  // Run annotation engine (layers 1-4)
+  runAnnotation(projectId, projectRoot);
 
   job.status = 'done';
 }

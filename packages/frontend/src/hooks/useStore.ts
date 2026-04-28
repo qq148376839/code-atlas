@@ -22,7 +22,8 @@ interface AppState {
   // Selected module / file
   selectedModuleId: string | null;
   selectedModule: ModuleDetail | null;
-  setSelectedModule: (id: string | null, detail: ModuleDetail | null) => void;
+  selectedNodeMeta: { description?: string; role?: string; impact?: { affectedCount: number; riskLevel: string }; groups?: string[] } | null;
+  setSelectedModule: (id: string | null, detail: ModuleDetail | null, meta?: { description?: string; role?: string; impact?: { affectedCount: number; riskLevel: string }; groups?: string[] } | null) => void;
 
   // Scan status
   scanStatus: ScanStatus | null;
@@ -68,7 +69,8 @@ export const useStore = create<AppState>((set) => ({
 
   selectedModuleId: null,
   selectedModule: null,
-  setSelectedModule: (id, detail) => set({ selectedModuleId: id, selectedModule: detail }),
+  selectedNodeMeta: null,
+  setSelectedModule: (id, detail, meta) => set({ selectedModuleId: id, selectedModule: detail, selectedNodeMeta: meta || null }),
 
   scanStatus: null,
   setScanStatus: (status) => set({ scanStatus: status }),
