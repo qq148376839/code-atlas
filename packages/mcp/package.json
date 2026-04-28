@@ -1,10 +1,11 @@
 {
-  "name": "@code-atlas/mcp",
-  "version": "0.1.0",
+  "name": "code-atlas-mcp",
+  "version": "0.5.0",
   "type": "module",
   "bin": {
     "code-atlas-mcp": "./dist/index.js"
   },
+  "files": ["dist"],
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc",

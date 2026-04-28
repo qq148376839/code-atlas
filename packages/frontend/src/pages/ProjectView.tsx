@@ -159,33 +159,63 @@ export default function ProjectView() {
 
 /* ─── MCP Copy Button ─── */
 function McpCopyButton({ projectId }: { projectId: string }) {
-  const [copied, setCopied] = useState(false);
+  const [show, setShow] = useState(false);
+  const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
-  const handleCopy = () => {
-    const apiBase = window.location.origin;
-    const config = JSON.stringify({
-      mcpServers: {
-        'code-atlas': {
-          command: 'npx',
-          args: ['code-atlas-mcp', `--api=${apiBase}`],
-          env: { CODE_ATLAS_PROJECT: projectId },
-        },
+  const apiBase = typeof window !== 'undefined' ? window.location.origin : '';
+
+  const installCmd = 'cd code-atlas/packages/mcp && npm run build && npm link';
+  const configJson = JSON.stringify({
+    mcpServers: {
+      'code-atlas': {
+        command: 'code-atlas-mcp',
+        args: [`--api=${apiBase}`],
+        env: { CODE_ATLAS_PROJECT: projectId },
       },
-    }, null, 2);
+    },
+  }, null, 2);
 
-    navigator.clipboard.writeText(config).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  const copyText = (text: string, label: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedItem(label);
+      setTimeout(() => setCopiedItem(null), 2000);
     });
   };
 
   return (
-    <button
-      onClick={handleCopy}
-      className="rounded-md border border-accent/30 bg-accent/5 px-2.5 py-1 text-xs text-accent hover:bg-accent/10 transition-colors"
-    >
-      {copied ? '已复制' : '接入 AI'}
-    </button>
+    <div className="relative">
+      <button
+        onClick={() => setShow(!show)}
+        className="rounded-md border border-accent/30 bg-accent/5 px-2.5 py-1 text-xs text-accent hover:bg-accent/10 transition-colors"
+      >
+        接入 AI
+      </button>
+      {show && (
+        <div className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-default bg-surface p-4 shadow-2xl z-50">
+          <div className="text-xs text-fg-secondary mb-3">将 code-atlas 接入 Claude Code</div>
+
+          <div className="mb-3">
+            <div className="text-[10px] text-fg-muted mb-1">1. 安装 MCP 工具</div>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 rounded bg-elevated px-2 py-1 text-[11px] text-fg font-mono truncate">{installCmd}</code>
+              <button onClick={() => copyText(installCmd, 'install')} className="text-[10px] text-accent shrink-0">
+                {copiedItem === 'install' ? '已复制' : '复制'}
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-3">
+            <div className="text-[10px] text-fg-muted mb-1">2. 粘贴到 .claude/settings.json</div>
+            <div className="rounded bg-elevated p-2 text-[10px] text-fg font-mono max-h-32 overflow-y-auto whitespace-pre">{configJson}</div>
+            <button onClick={() => copyText(configJson, 'config')} className="mt-1 text-[10px] text-accent">
+              {copiedItem === 'config' ? '已复制 ✓' : '复制配置'}
+            </button>
+          </div>
+
+          <button onClick={() => setShow(false)} className="text-[10px] text-fg-muted hover:text-fg">关闭</button>
+        </div>
+      )}
+    </div>
   );
 }
 
