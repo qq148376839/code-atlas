@@ -7,7 +7,6 @@ interface GroupNodeData {
   lineCount: number;
   complexityScore: number;
   childCount: number;
-  // width/height set by layout
   width?: number;
   height?: number;
 }
@@ -16,15 +15,19 @@ export default function GroupNode({ data }: NodeProps) {
   const { name, fileCount, lineCount, complexityScore, childCount, width, height } = data as unknown as GroupNodeData;
   const level = getLevel(complexityScore);
 
+  // Use ELK-computed dimensions, fallback to minimum
+  const w = width || 400;
+  const h = height || 300;
+
   return (
     <>
       <Handle type="target" position={Position.Top} className="!bg-fg-muted !w-1.5 !h-1.5 !border-0" />
       <div
-        className="rounded-lg border border-dashed border-emphasis bg-surface/30 backdrop-blur-sm"
-        style={{ width: width || 300, height: height || 200 }}
+        className="rounded-lg border border-dashed border-emphasis/60 bg-surface/20"
+        style={{ width: w, height: h, minWidth: 200, minHeight: 100 }}
       >
         {/* Title bar */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-default/50">
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-default/30 bg-surface/40 rounded-t-lg">
           <div className="flex items-center gap-2">
             <div className={`h-2 w-2 rounded-full shrink-0 ${level.dotColor}`} />
             <span className="text-xs font-medium text-fg">{name}/</span>
@@ -32,10 +35,10 @@ export default function GroupNode({ data }: NodeProps) {
           <div className="flex items-center gap-2 text-[10px] text-fg-muted font-mono">
             <span>{fileCount} 文件</span>
             <span>{formatLines(lineCount)} 行</span>
-            <span>{childCount} 项</span>
+            <span className="bg-elevated/80 rounded px-1">{childCount} 项</span>
           </div>
         </div>
-        {/* Content area is managed by ReactFlow child positioning */}
+        {/* ReactFlow positions children inside this container */}
       </div>
       <Handle type="source" position={Position.Bottom} className="!bg-fg-muted !w-1.5 !h-1.5 !border-0" />
     </>

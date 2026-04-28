@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -6,6 +6,8 @@ import {
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
+  ReactFlowProvider,
   type Node,
   type Edge,
 } from '@xyflow/react';
@@ -19,12 +21,16 @@ import { computeHierarchicalLayout } from './layout';
 
 const nodeTypes = { module: ModuleNode, group: GroupNode };
 
-export default function ModuleMap() {
+function ModuleMapInner() {
   const { currentProjectId, setSelectedModule, treeCache, expandedPaths, setTreeData, toggleExpanded } = useStore();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [layoutReady, setLayoutReady] = useState(false);
   const [nodeError, setNodeError] = useState<string | null>(null);
+  const { fitView } = useReactFlow();
+
+  // Click timer for distinguishing single vs double click
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load root tree on mount
   useEffect(() => {
@@ -48,7 +54,6 @@ export default function ModuleMap() {
   useEffect(() => {
     const rootData = treeCache.get('');
     if (!rootData) return;
-
     buildGraph();
   }, [treeCache, expandedPaths]);
 
@@ -60,7 +65,7 @@ export default function ModuleMap() {
     const allEdges: Edge[] = [];
     const maxLines = getMaxLines(rootData.children);
 
-    function addLevel(children: TreeChild[], parentPath: string, parentNodeId: string | undefined) {
+    function addLevel(parentPath: string, parentNodeId: string | undefined) {
       const data = treeCache.get(parentPath);
       if (!data) return;
 
@@ -69,7 +74,6 @@ export default function ModuleMap() {
         const nodeId = child.path;
 
         if (isExpanded) {
-          // Group node (expanded directory)
           allNodes.push({
             id: nodeId,
             type: 'group',
@@ -84,14 +88,9 @@ export default function ModuleMap() {
               childCount: child.childCount || 0,
             },
           });
-
-          // Recursively add children
-          const childData = treeCache.get(child.path);
-          if (childData) {
-            addLevel(childData.children, child.path, nodeId);
-          }
+          // Recursively add children of expanded directory
+          addLevel(child.path, nodeId);
         } else {
-          // Collapsed directory or file
           allNodes.push({
             id: nodeId,
             type: 'module',
@@ -111,12 +110,11 @@ export default function ModuleMap() {
         }
       }
 
-      // Add edges for this level
+      // Add edges at this level
       for (const edge of data.edges) {
-        // Only add edge if both source and target are direct children at this level
-        const sourceNode = allNodes.find(n => n.id === edge.source);
-        const targetNode = allNodes.find(n => n.id === edge.target);
-        if (sourceNode && targetNode) {
+        const sourceExists = allNodes.some(n => n.id === edge.source);
+        const targetExists = allNodes.some(n => n.id === edge.target);
+        if (sourceExists && targetExists) {
           allEdges.push({
             id: `e-${edge.source}-${edge.target}`,
             source: edge.source,
@@ -133,25 +131,32 @@ export default function ModuleMap() {
       }
     }
 
-    addLevel(rootData.children, '', undefined);
+    addLevel('', undefined);
 
     try {
       const layouted = await computeHierarchicalLayout(allNodes, allEdges);
       setNodes(layouted.nodes);
       setEdges(layouted.edges);
       setLayoutReady(true);
+      // Fit view after layout with a small delay for React to render
+      setTimeout(() => fitView({ padding: 0.15, duration: 300 }), 100);
     } catch (err) {
       console.error('Layout failed:', err);
     }
-  }, [treeCache, expandedPaths, setNodes, setEdges]);
+  }, [treeCache, expandedPaths, setNodes, setEdges, fitView]);
 
-  // Double-click to expand/collapse directory
+  // Double-click: expand/collapse directory
   const handleNodeDoubleClick = useCallback(
     async (_: any, node: Node) => {
+      // Cancel pending single-click
+      if (clickTimer.current) {
+        clearTimeout(clickTimer.current);
+        clickTimer.current = null;
+      }
+
       if (node.data?.nodeKind !== 'directory' && node.type !== 'group') return;
       const path = node.data?.path as string;
 
-      // Pre-fetch before expanding
       if (!expandedPaths.has(path) && !treeCache.has(path)) {
         await loadTreeLevel(path);
       }
@@ -160,31 +165,40 @@ export default function ModuleMap() {
     [expandedPaths, treeCache, loadTreeLevel, toggleExpanded]
   );
 
-  // Single click to show detail
+  // Single click: show detail (delayed to avoid conflict with double-click)
   const handleNodeClick = useCallback(
-    async (_: any, node: Node) => {
-      if (!currentProjectId) return;
-      if (node.type === 'group') return; // Don't show detail for expanded groups
-
-      // For files, load module detail if possible
-      if (node.data?.nodeKind === 'file') {
-        // Show basic info — we can enhance later with file-level detail
-        setSelectedModule(node.id, null);
-        return;
+    (_: any, node: Node) => {
+      // Clear any existing timer
+      if (clickTimer.current) {
+        clearTimeout(clickTimer.current);
+        clickTimer.current = null;
       }
 
-      // For collapsed directories, try to load as module detail
-      try {
-        const modules = await projectApi.modules(currentProjectId);
-        const mod = modules.find(m => m.name === node.data?.name || m.path === node.data?.path);
-        if (mod) {
-          const detail = await projectApi.moduleDetail(currentProjectId, mod.id);
-          setSelectedModule(node.id, detail);
+      // Delay single-click action to distinguish from double-click
+      clickTimer.current = setTimeout(async () => {
+        clickTimer.current = null;
+        if (!currentProjectId) return;
+        if (node.type === 'group') return;
+
+        // For directories, try loading module detail
+        if (node.data?.nodeKind === 'directory') {
+          try {
+            const modules = await projectApi.modules(currentProjectId);
+            const mod = modules.find((m: any) => m.name === node.data?.name || m.path === node.data?.path);
+            if (mod) {
+              const detail = await projectApi.moduleDetail(currentProjectId, mod.id);
+              setSelectedModule(node.id, detail);
+            }
+          } catch {
+            setNodeError('加载详情失败');
+            setTimeout(() => setNodeError(null), 3000);
+          }
+          return;
         }
-      } catch {
-        setNodeError('加载详情失败');
-        setTimeout(() => setNodeError(null), 3000);
-      }
+
+        // For files
+        setSelectedModule(node.id, null);
+      }, 280);
     },
     [currentProjectId, setSelectedModule]
   );
@@ -229,6 +243,15 @@ export default function ModuleMap() {
         </div>
       )}
     </div>
+  );
+}
+
+// Wrap with ReactFlowProvider to use useReactFlow hook
+export default function ModuleMap() {
+  return (
+    <ReactFlowProvider>
+      <ModuleMapInner />
+    </ReactFlowProvider>
   );
 }
 
