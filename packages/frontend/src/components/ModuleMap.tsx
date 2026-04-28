@@ -180,24 +180,16 @@ function ModuleMapInner() {
         if (!currentProjectId) return;
         if (node.type === 'group') return;
 
-        // For directories, try loading module detail
-        if (node.data?.nodeKind === 'directory') {
-          try {
-            const modules = await projectApi.modules(currentProjectId);
-            const mod = modules.find((m: any) => m.name === node.data?.name || m.path === node.data?.path);
-            if (mod) {
-              const detail = await projectApi.moduleDetail(currentProjectId, mod.id);
-              setSelectedModule(node.id, detail);
-            }
-          } catch {
-            setNodeError('加载详情失败');
-            setTimeout(() => setNodeError(null), 3000);
-          }
-          return;
-        }
+        const nodePath = node.data?.path as string;
+        if (!nodePath) return;
 
-        // For files
-        setSelectedModule(node.id, null);
+        try {
+          const detail = await projectApi.nodeDetail(currentProjectId, nodePath);
+          setSelectedModule(node.id, detail);
+        } catch {
+          setNodeError('加载详情失败');
+          setTimeout(() => setNodeError(null), 3000);
+        }
       }, 280);
     },
     [currentProjectId, setSelectedModule]

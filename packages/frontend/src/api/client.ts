@@ -100,4 +100,7 @@ export const projectApi = {
 
   tree: (id: string, path = '') =>
     api.get(`projects/${id}/tree`, { searchParams: path ? { path } : {} }).json<TreeResponse>(),
+
+  nodeDetail: (id: string, path: string) =>
+    api.get(`projects/${id}/node-detail`, { searchParams: { path } }).json<ModuleDetail>(),
 };

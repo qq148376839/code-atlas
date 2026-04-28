@@ -26,6 +26,90 @@ interface TreeEdge {
 }
 
 export async function treeRoutes(app: FastifyInstance): Promise<void> {
+
+  // Node detail — returns detail for any path (file or directory) in ModuleDetail format
+  app.get('/api/projects/:id/node-detail', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const nodePath = (request.query as { path?: string }).path || '';
+
+    const db = getDb();
+    const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(id);
+    if (!project) return reply.status(404).send({ error: 'Project not found' });
+
+    const allFiles = db.prepare(
+      'SELECT path, language, line_count, exports, imports FROM files WHERE project_id = ?'
+    ).all(id) as FileRow[];
+
+    const allFilePaths = new Set(allFiles.map(f => f.path));
+
+    // Find files for this node
+    const isFile = allFiles.some(f => f.path === nodePath);
+    const nodeFiles = isFile
+      ? allFiles.filter(f => f.path === nodePath)
+      : allFiles.filter(f => f.path.startsWith(nodePath + '/'));
+
+    if (nodeFiles.length === 0) {
+      return reply.status(404).send({ error: 'Node not found' });
+    }
+
+    const totalLines = nodeFiles.reduce((s, f) => s + f.line_count, 0);
+    const fileCount = nodeFiles.length;
+    const avgLines = fileCount > 0 ? totalLines / fileCount : 0;
+    const rawScore = isFile
+      ? Math.min(Math.round(nodeFiles[0].line_count / 5), 100)
+      : Math.min(Math.round((fileCount * 0.3 + Math.min(totalLines / 100, 100) * 0.3 + Math.min(avgLines / 50, 100) * 0.4)), 100);
+
+    // Compute dependencies (outgoing and incoming) at file level
+    const nodeFilePaths = new Set(nodeFiles.map(f => f.path));
+    const dependsOnMap = new Map<string, number>();
+    const dependedByMap = new Map<string, number>();
+
+    for (const file of nodeFiles) {
+      const imports: Array<{ source: string; isExternal: boolean }> = JSON.parse(file.imports || '[]');
+      for (const imp of imports) {
+        if (imp.isExternal) continue;
+        const resolved = resolveImport(file.path, imp.source, allFilePaths);
+        if (resolved && !nodeFilePaths.has(resolved)) {
+          // Find the top-level directory of the target
+          const targetLabel = getDirectoryLabel(resolved, nodePath);
+          dependsOnMap.set(targetLabel, (dependsOnMap.get(targetLabel) || 0) + 1);
+        }
+      }
+    }
+
+    // Incoming: other files that import from this node
+    for (const file of allFiles) {
+      if (nodeFilePaths.has(file.path)) continue;
+      const imports: Array<{ source: string; isExternal: boolean }> = JSON.parse(file.imports || '[]');
+      for (const imp of imports) {
+        if (imp.isExternal) continue;
+        const resolved = resolveImport(file.path, imp.source, allFilePaths);
+        if (resolved && nodeFilePaths.has(resolved)) {
+          const sourceLabel = getDirectoryLabel(file.path, nodePath);
+          dependedByMap.set(sourceLabel, (dependedByMap.get(sourceLabel) || 0) + 1);
+        }
+      }
+    }
+
+    return {
+      id: nodePath,
+      name: path.basename(nodePath),
+      path: nodePath,
+      fileCount,
+      lineCount: totalLines,
+      complexityScore: rawScore,
+      files: nodeFiles.map(f => ({
+        path: f.path,
+        language: f.language,
+        lineCount: f.line_count,
+        exports: JSON.parse(f.exports || '[]'),
+        imports: JSON.parse(f.imports || '[]'),
+      })),
+      dependsOn: Array.from(dependsOnMap.entries()).map(([name, weight]) => ({ targetModule: name, weight })).sort((a, b) => b.weight - a.weight),
+      dependedBy: Array.from(dependedByMap.entries()).map(([name, weight]) => ({ sourceModule: name, weight })).sort((a, b) => b.weight - a.weight),
+    };
+  });
+
   app.get('/api/projects/:id/tree', async (request, reply) => {
     const { id } = request.params as { id: string };
     const queryPath = (request.query as { path?: string }).path || '';
@@ -215,4 +299,16 @@ function resolveImport(
   }
 
   return null;
+}
+
+/**
+ * Get a human-readable label for a file path relative to the context.
+ * E.g. for "src/core/parser.ts" in context "src/routes.ts", returns "src/core"
+ */
+function getDirectoryLabel(filePath: string, contextPath: string): string {
+  // Find common parent, then take the first segment that differs
+  const parts = filePath.split('/');
+  if (parts.length <= 1) return filePath;
+  // Return the parent directory of the file
+  return parts.slice(0, -1).join('/') || parts[0];
 }
